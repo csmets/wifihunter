@@ -78,14 +78,14 @@ def scan (s, loopTime):
         writeJSONFile(wifiFile, wifiList)
 
     # Loop through scan
-    s.enter(1, loopTime, scan(s, loopTime))
+    s.enter(loopTime, 1, scan,(s, loopTime))
 
 
 def hunt (loopTime = 1):
     # Init the schedular which will be used to loop the scan every x amount of
     # time.
     s = sched.scheduler(time.time, time.sleep)
-    s.enter(1, loopTime, scan(s, loopTime))
+    s.enter(loopTime, 1, scan, (s, loopTime))
     s.run()
 
 hunt(1)
