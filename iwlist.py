@@ -1,6 +1,7 @@
 import re
 import subprocess
 import datetime
+import sqlite3
 
 cellNumberRe = re.compile(r"^Cell\s+(?P<cellnumber>.+)\s+-\s+Address:\s(?P<mac>.+)$")
 regexps = [
@@ -24,15 +25,36 @@ def scan(interface='wlan0'):
 
 # Parses the response from the command "iwlist scan"
 def parse(content):
+
+    # load the MAC address lookup db
+    conn = sqlite3.connect('oui.db')
+    c = conn.cursor()
+    
     cells = []
     lines = content.split('\n')
     for line in lines:
         line = line.strip()
         cellNumber = cellNumberRe.search(line)
         if cellNumber is not None:
-            time = datetime.datetime.now().time()
             cellData = cellNumber.groupdict()
+
+            # Create a timestamp of when the connection is found
+            time = datetime.datetime.now().time()
+
+            # Get vendor of router
+            vendor = ''
+            address = cellData['mac']
+            address = address[:8]
+            address = address.replace(":","")
+            c.execute("SELECT name FROM oui WHERE oui='" + address + "'")
+            dbValue = c.fetchone()
+            if (dbValue):
+                vendor = dbValue[0]
+            else:
+                vendor = 'none'
+
             cellData['time'] = str(time)
+            cellData['vendor'] = vendor
             cells.append(cellData)
             continue
         for expression in regexps:
