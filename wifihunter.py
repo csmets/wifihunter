@@ -19,20 +19,16 @@
 #    update the time stamp.
 # 4. Set wait time before looping back to step 1.
 
-import iwlist
-import json
-import os.path
-import datetime
-import sched, time
+import iwlist, json, os, datetime, sched, time, argparse, re
 
 def writeJSONFile (file, content):
     with open(file, 'w') as f:
         json.dump(content, f, sort_keys = True, indent = 4,
                   ensure_ascii = False)
 
-def scan (s, loopTime):
+def scan (interface, s, loopTime):
     # Run iwlist to store all found wifi results into a list
-    content = iwlist.scan()
+    content = iwlist.scan(interface)
     wifiList = iwlist.parse(content) # list containing objects with wifi data
 
     wifiFile  = 'wifi_found.json'
@@ -70,22 +66,46 @@ def scan (s, loopTime):
             if found == False:
                 wifiJSON.append(wifiList[wi])
 
+        connectToOpenWifi(interface, wifiJSON)
+
         # Overwrite the existing JSON file with the new list.
         writeJSONFile(wifiFile, wifiJSON)
 
     else:
+        connectToOpenWifi(interface, wifiList)
         # Write original wifi list to JSON if no file exists.
         writeJSONFile(wifiFile, wifiList)
 
     # Loop through scan
-    s.enter(loopTime, 1, scan,(s, loopTime))
+    s.enter(loopTime, 1, scan,(interface, s, loopTime))
 
 
-def hunt (loopTime = 1):
+def connectToOpenWifi (interface, wifiList):
+    for i in range(len(wifiList)):
+        if wifiList[i]['encryption'] == 'off':
+            # Try and connect to the wifi network
+            os.popen("sudo iwconfig " + re.escape(interface) + " essid " + wifiList[i]['mac'])
+            time.sleep(5)
+            getRouter = os.popen("ip route show | awk '/default/ {print $3}'").read()
+            print(getRouter)
+
+def hunt (interface = 'wlan0', loopTime = 1):
     # Init the schedular which will be used to loop the scan every x amount of
     # time.
     s = sched.scheduler(time.time, time.sleep)
-    s.enter(loopTime, 1, scan, (s, loopTime))
+    s.enter(loopTime, 1, scan, (interface, s, loopTime))
     s.run()
 
-hunt(1)
+parser = argparse.ArgumentParser()
+parser.add_argument("--interface", help="wifi device interface name")
+parser.add_argument("--ls", help="loop seconds")
+args = parser.parse_args()
+
+if args.interface and args.ls:
+    hunt(args.interface, args.ls)
+elif args.interface:
+    hunt(args.interface)
+elif args.ls:
+    hunt('wlan0', args.ls)
+else:
+    hunt()
